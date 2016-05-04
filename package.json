@@ -1,0 +1,26 @@
+{
+  "name": "placar-ao-vivo",
+  "version": "1.0.0",
+  "description": "Aplicacao que verifica se existem alteracoes nos elementos de placar ao vivo e envia as atualizacoes via push para os clientes",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Valdo Raya",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "2.7.1",
+    "express": "4.13.4",
+    "mkpath": "1.0.0",
+    "pusher": "1.2.1",
+    "request": "2.72.0",
+    "socket.io": "1.4.5",
+    "socket.io-client": "1.4.5",
+    "xml2js": "0.4.16"
+  },
+  "devDependencies": {
+    "gulp": "3.9.1",
+    "gulp-nodemon": "2.0.6"
+  }
+}
