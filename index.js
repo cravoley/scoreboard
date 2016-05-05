@@ -42,14 +42,20 @@ function getScoreboardContent(scoreBoardId, callback) {
 			return callback.apply(this, [board]);
 		}
 	});
-	contentHub.getContent(scoreBoardId, true, function (cHubContent) {
-		footstats.handleAndParseContentHubReturn(cHubContent, function (parsedContent) {
-			var contentToEmit = updateScoreboards(parsedContent);
-			return callback.apply(this, [contentToEmit]);
+	if (!found)
+		contentHub.getContent(scoreBoardId, true, function (cHubContent) {
+			footstats.handleAndParseContentHubReturn(cHubContent, function (parsedContent) {
+				var contentToEmit = updateScoreboards(parsedContent);
+				return callback.apply(this, [contentToEmit]);
+			});
 		});
-	});
 }
 
+/**
+ * Update scoreboard array and return the updated scoreboard
+ * @param content
+ * @returns {*}
+ */
 function updateScoreboards(content) {
 	if (content && content.contentId) {
 		var newContent = {
@@ -116,6 +122,10 @@ function propagateUpdates(updatedContent) {
 }
 
 
+/**
+ * Callback function that is called when a change is detected on content hub
+ * @param result
+ */
 var changesCallback = function (result) {
 	var updatedContent = [];
 
@@ -145,20 +155,33 @@ var changesCallback = function (result) {
 		result.changelist.event.forEach(addContentIdsToList);
 		updatedContent.forEach(fetchAndSaveContent)
 	}
-}
-
-var init = function () {
-	// TODO: encontrar uma forma de manter as chaves de autenticação entre os requests
-	var that = this;
-	try {
-		contentHub.checkChanges(10 * 1000, changesCallback);
-	} catch (error) {
-		console.log("Ocorreu um erro ao verificar as alterações no servidor", error);
-		that.apply(this, []);
-	}
 };
-init();
 
-// TODO: limpar array de partidas e placares
+// verifica as alterações a cada 1 segundo
+contentHub.checkChanges(1000, changesCallback);
+
+/**
+ * clean scoreBoardsAndMatches array to save memory
+ */
+(function () {
+	function cleanUp() {
+		var tooOldTime = new Date();
+		// there is no update for 45 minutes... the board is quite old, isn't it?
+		tooOldTime.setMinutes(tooOldTime.getMinutes() - 45);
+		scoreBoardsAndMatches = scoreBoardsAndMatches.filter(function (board) {
+			if(board.lastUpdate < tooOldTime.getTime()){
+				console.log("Board is too old, removing it",board);
+				return false;
+			}
+			return true;
+		});
+		//console.log(scoreBoardsAndMatches);
+		// execute it every minute
+		setTimeout(cleanUp, 60 * 1000);
+	}
+
+	cleanUp();
+})();
+
 
 server.listen(3000);
