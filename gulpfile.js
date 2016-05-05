@@ -12,30 +12,3 @@ gulp.task('default', function () {
 		console.log('restarted!')
 	})
 });
-
-gulp.task('QA', function () {
-	nodemon({
-		script: 'index.js',
-		env: {'NODE_ENV': 'QA'}
-	}).on('start', function () {
-		console.log('nodemon started');
-	}).on('crash', function () {
-		console.log('script crashed for some reason');
-		nodemon.emit('restart');
-	});
-
-});
-
-
-gulp.task('PROD', function () {
-	nodemon({
-		script: 'index.js',
-		env: {'NODE_ENV': 'PROD'}
-	}).on('start', function () {
-		console.log('nodemon started');
-	}).on('crash', function () {
-		console.log('script crashed for some reason');
-		nodemon.emit('restart');
-	});
-
-});
