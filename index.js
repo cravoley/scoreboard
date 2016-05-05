@@ -36,7 +36,7 @@ nsp.on('connection', function (socket) {
  */
 function getScoreboardContent(scoreBoardId, callback) {
 	var found = false;
-	scoreBoardsAndMatches.forEach(function (board, key) {
+	scoreBoardsAndMatches.forEach(function (board) {
 		if (board.contentId == scoreBoardId) {
 			found = true;
 			return callback.apply(this, [board]);
@@ -100,7 +100,7 @@ function propagateUpdates(updatedContent) {
 		if (updatedContent.contentId) {
 			// Search scoreBoards where this match is referenced
 			if (scoreBoardsAndMatches) {
-				scoreBoardsAndMatches.forEach(function (board, key) {
+				scoreBoardsAndMatches.forEach(function (board) {
 					if (board.matches != "undefined" && board.matches.length > 0) {
 						board.matches.forEach(function (match, key) {
 							//console.log(match.id ,match.id == updatedContent.contentId);
@@ -131,7 +131,7 @@ var changesCallback = function (result) {
 
 	/**
 	 * Add changed contentIds to updatedContent that will be used to fetch the updated content from the content-hub WS
-	 * @param content   {"type":"CREATED|REMOVED","content":{"id":"7.2050","version":"1462280735"}}
+	 * @param content  the returned content from contenthub {"type":"CREATED|REMOVED","content":{"id":"7.2050","version":"1462280735"}}
 	 */
 	function addContentIdsToList(content) {
 		if (content.type == "CREATED") {
