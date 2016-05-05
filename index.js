@@ -2,107 +2,55 @@ var express = require('express'),
 	app = express(),
 	server = require('http').createServer(app),
 	io = require('socket.io').listen(server),
-	path = require('path'),
-	config = require("./config");
-var mkpath = require('mkpath');
-var fs = require("fs");
-mkpath.sync(config.cacheDir);
+	contentHub = require("./bin/contenthub"),
+	util = require("./lib/util"),
+	footstats = require("./lib/footstats");
 
+
+var scoreBoardsAndMatches = [];
 
 var nsp = io.of("/livescore");
 //io.set('origins', config.origins);
-
-
-
-/**
- * Remove unnecessary content from return object based on type
- * @param dirtyContent
- * @param type
- * @param callback
- */
-function clearContent(dirtyContent, type, callback) {
-	var cleanContent;
-	if (type == "scoreboard") {
-		cleanContent = {
-			"matches": []
-		};
-		if (dirtyContent.matches) {
-			dirtyContent.matches.forEach(function (match) {
-				clearContent(match, "match", function (mClean) {
-					cleanContent.matches.push(mClean);
-				});
-			})
-		}
-	} else if (type == "match") {
-		// create an empty content
-		cleanContent = {
-			"id": "",
-			"homeTeam": "",
-			"homeTeamLogo": "",
-			"homeScore": "",
-			"homeScorePenalty": "",
-			"awayTeam": "",
-			"awayTeamLogo": "",
-			"awayScore": "",
-			"awayScorePenalty": "",
-			"stadium": "",
-			"status": ""
-		}
-		if (dirtyContent.contentData) {
-			dirtyContent = dirtyContent.contentData;
-		}
-		cleanContent.id = dirtyContent.contentId;
-		cleanContent.status = dirtyContent.status;
-		cleanContent.stadium = dirtyContent.stadium;
-		cleanContent.homeTeam = dirtyContent.homeTeam;
-		cleanContent.homeTeamLogo = dirtyContent.homeTeamLogo;
-		cleanContent.homeScore = dirtyContent.homeScore;
-		cleanContent.homeScorePenalty = dirtyContent.homeScorePenalty;
-		cleanContent.awayTeam = dirtyContent.awayTeam;
-		cleanContent.awayTeamLogo = dirtyContent.awayTeamLogo;
-		cleanContent.awayScore = dirtyContent.awayScore;
-		cleanContent.awayScorePenalty = dirtyContent.awayScorePenalty;
-
-	}
-	callback.apply(this, [cleanContent]);
-}
-
 nsp.on('connection', function (socket) {
 	var liveScoreId = socket.handshake.query.id;
 	if (!liveScoreId || liveScoreId == "undefined") return;
 	console.log("connected", liveScoreId);
 	socket.join(liveScoreId);
 	getScoreboardContent(liveScoreId, function (content) {
-		clearContent(content, "scoreboard", function (c) {
+		util.clearContent(content, "scoreboard", function (c) {
 			socket.emit("scoreboard", c);
 		});
 	});
-	socket.on('disconnect', function () {
-		//console.log('user disconnected');
-	});
+	/*	socket.on('disconnect', function () {
+	 //console.log('user disconnected');
+	 });*/
 });
-var contentHub = require("./bin/contenthub");
-var scoreBoardsAndMatches = [];
 
 
+/**
+ * Search for the scoreboard content to send it to the connecting client.
+ * It will search the scoreboard array for a valid content based on the contentId got on scoreBoardId parameter.
+ *
+ * @param scoreBoardId scoreboard ContentId
+ * @param callback function
+ */
 function getScoreboardContent(scoreBoardId, callback) {
 	var found = false;
 	scoreBoardsAndMatches.forEach(function (board, key) {
 		if (board.contentId == scoreBoardId) {
 			found = true;
-			callback.apply(this, [board]);
-			return;
+			return callback.apply(this, [board]);
 		}
 	});
-	contentHub.getContent(scoreBoardId, true, function (content) {
-		handleAndParseContentHubReturn(content, function (content) {
-			var contentToEmit = updateScoreBoardsAndMatches(content);
-			callback.apply(this, [contentToEmit]);
+	contentHub.getContent(scoreBoardId, true, function (cHubContent) {
+		footstats.handleAndParseContentHubReturn(cHubContent, function (parsedContent) {
+			var contentToEmit = updateScoreboards(parsedContent);
+			return callback.apply(this, [contentToEmit]);
 		});
 	});
 }
 
-function updateScoreBoardsAndMatches(content) {
+function updateScoreboards(content) {
 	if (content && content.contentId) {
 		var newContent = {
 			"contentId": content.contentId,
@@ -123,14 +71,21 @@ function updateScoreBoardsAndMatches(content) {
 		}
 		return newContent;
 	}
+	return {};
 }
 
+/**
+ * Prepare content to be send to connected clients.
+ * If the updated content is a match it will search in all scoreboards for references to this match and update the board
+ * @param updatedContent
+ */
 function propagateUpdates(updatedContent) {
+	if (updatedContent == "undefined") return;
 	//console.log("PO",updatedContent);
 	// the full board has been updated
 	if (updatedContent._type == "br.com.hed.third.party.service.footstats.match.scoreBoard.match.ScoreBoardModelMapping$ScoreBoardModel") {
-		var contentToPropagate = updateScoreBoardsAndMatches(updatedContent);
-		clearContent(contentToPropagate, "scoreboard", function (c) {
+		var contentToPropagate = updateScoreboards(updatedContent);
+		util.clearContent(contentToPropagate, "scoreboard", function (c) {
 			//console.log("Sending update to ",updatedContent.contentId, c);
 			nsp.to(updatedContent.contentId).emit("scoreboard", c);
 		});
@@ -146,13 +101,14 @@ function propagateUpdates(updatedContent) {
 							if (match.id == updatedContent.contentId || match.contentId == updatedContent.contentId) {
 								board.matches[key] = updatedContent;
 								board.lastUpdate = new Date().getTime();
-								clearContent(updatedContent, "match", function (c) {
+								util.clearContent(updatedContent, "match", function (c) {
 									nsp.to(board.contentId).emit("match", c);
 								});
 							}
 						});
 					}
 				});
+
 			}
 		}
 
@@ -160,36 +116,13 @@ function propagateUpdates(updatedContent) {
 }
 
 
-function handleAndParseContentHubReturn(content, callback) {
-	if (content) {
-		if (content.contentData) {
-			content = content.contentData;
-			// the whole score board has been updated
-			if (content._type == "br.com.hed.third.party.service.footstats.match.scoreBoard.match.ScoreBoardModelMapping$ScoreBoardModel") {
-				if (Array.isArray(content.matchesList)) {
-					var contentToFetch = content.matchesList.length;
-					//console.log(content);
-					content.matchesList.forEach(function (match, key) {
-						var contentId = match.replace("contentid/", "");
-						contentHub.getContent(contentId, true, function (resp) {
-							content.matchesList[key] = resp;
-							if (--contentToFetch <= 0) {
-								callback.apply(this, [content]);
-							}
-						})
-					});
-				}
-				return;
-			} else
-				return callback.apply(this, [content]);
-		}
-	}
-	console.error("Unable to handle return ", content);
-	callback.apply(this, []);
-}
 var changesCallback = function (result) {
 	var updatedContent = [];
 
+	/**
+	 * Add changed contentIds to updatedContent that will be used to fetch the updated content from the content-hub WS
+	 * @param content   {"type":"CREATED|REMOVED","content":{"id":"7.2050","version":"1462280735"}}
+	 */
 	function addContentIdsToList(content) {
 		if (content.type == "CREATED") {
 			if (content.content[0] && content.content[0].id[0]) {
@@ -204,7 +137,7 @@ var changesCallback = function (result) {
 
 	function fetchAndSaveContent(contentId) {
 		contentHub.getContent(contentId, function (content) {
-			handleAndParseContentHubReturn(content, propagateUpdates);
+			footstats.handleAndParseContentHubReturn(content, propagateUpdates);
 		})
 	}
 
