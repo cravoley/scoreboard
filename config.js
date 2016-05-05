@@ -1,3 +1,5 @@
+var mkpath = require('mkpath');
+
 var env = process.env.NODE_ENV;
 var config;
 if (env === 'development') {
@@ -11,5 +13,7 @@ if (config.contentHub.changes.lastIndexOf("/") != (config.contentHub.changes.len
 if (config.contentHub.content.lastIndexOf("/") != (config.contentHub.content.length - 1)) config.contentHub.content = config.contentHub.content + "/";
 if (!config.username) config.username = "sysadmin";
 if (!config.password) config.password = "sysadmin";
+
+mkpath.sync(config.cacheDir);
 
 module.exports = config;
