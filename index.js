@@ -16,8 +16,10 @@ nsp.on('connection', function (socket) {
 	if (!liveScoreId || liveScoreId == "undefined") return;
 	console.log("connected", liveScoreId);
 	socket.join(liveScoreId);
-	getScoreboardContent(liveScoreId, function (content) {
-		util.clearContent(content, "scoreboard", function (c) {
+	getScoreboardContent(liveScoreId, function (err, content) {
+		// console.log("CLEAR",content);
+		util.clearContent(footstats.prepareContentForTransmission(content), "scoreboard", function (c) {
+			// console.log("SEND",c);
 			socket.emit("scoreboard", c);
 		});
 	});
@@ -39,14 +41,13 @@ function getScoreboardContent(scoreBoardId, callback) {
 	scoreBoardsAndMatches.forEach(function (board) {
 		if (board.contentId == scoreBoardId) {
 			found = true;
-			return callback.apply(this, [board]);
+			return callback.apply(this, [null, board]);
 		}
 	});
 	if (!found)
-		contentHub.getContent(scoreBoardId, true, function (cHubContent) {
-			footstats.handleAndParseContentHubReturn(cHubContent, function (parsedContent) {
-				var contentToEmit = updateScoreboards(parsedContent);
-				return callback.apply(this, [contentToEmit]);
+		contentHub.getContent(scoreBoardId, true, function (err, cHubContent) {
+			footstats.handleAndParseContentHubReturn(cHubContent, function (err, contentToEmit) {
+				return callback.apply(this, [null, contentToEmit]);
 			});
 		});
 }
@@ -58,11 +59,6 @@ function getScoreboardContent(scoreBoardId, callback) {
  */
 function updateScoreboards(content) {
 	if (content && content.contentId) {
-		var newContent = {
-			"contentId": content.contentId,
-			"matches": content.matchesList,
-			"lastUpdate": new Date().getTime()
-		};
 		var found = false;
 		scoreBoardsAndMatches.forEach(function (board, key) {
 			if (board.contentId == content.contentId) {
@@ -71,11 +67,11 @@ function updateScoreboards(content) {
 			}
 		});
 		if (found === false) {
-			scoreBoardsAndMatches.push(newContent);
+			scoreBoardsAndMatches.push(content);
 		} else {
-			scoreBoardsAndMatches[found] = newContent;
+			scoreBoardsAndMatches[found] = content;
 		}
-		return newContent;
+		return content;
 	}
 	return {};
 }
@@ -85,14 +81,14 @@ function updateScoreboards(content) {
  * If the updated content is a match it will search in all scoreboards for references to this match and update the board
  * @param updatedContent
  */
-function propagateUpdates(updatedContent) {
+function propagateUpdates(err,updatedContent) {
 	if (updatedContent == "undefined") return;
 	//console.log("PO",updatedContent);
 	// the full board has been updated
 	if (updatedContent._type == "br.com.hed.third.party.service.footstats.match.scoreBoard.match.ScoreBoardModelMapping$ScoreBoardModel") {
-		var contentToPropagate = updateScoreboards(updatedContent);
+		var contentToPropagate = updateScoreboards(footstats.prepareContentForTransmission(updatedContent));
 		util.clearContent(contentToPropagate, "scoreboard", function (c) {
-			//console.log("Sending update to ",updatedContent.contentId, c);
+			// console.log("Sending update to ",updatedContent.contentId, c);
 			nsp.to(updatedContent.contentId).emit("scoreboard", c);
 		});
 	} else if (updatedContent._type == "br.com.hed.third.party.service.footstats.match.scoreBoard.match.ScoreBoardMatchModelMapping$MatchBean") {
@@ -126,7 +122,7 @@ function propagateUpdates(updatedContent) {
  * Callback function that is called when a change is detected on content hub
  * @param result
  */
-var changesCallback = function (result) {
+var changesCallback = function (err, result) {
 	var updatedContent = [];
 
 	/**
@@ -146,7 +142,7 @@ var changesCallback = function (result) {
 	}
 
 	function fetchAndSaveContent(contentId) {
-		contentHub.getContent(contentId, function (content) {
+		contentHub.getContent(contentId, function (err, content) {
 			footstats.handleAndParseContentHubReturn(content, propagateUpdates);
 		})
 	}

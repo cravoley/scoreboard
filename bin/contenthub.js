@@ -37,7 +37,7 @@ function ContentHub() {
 				xml2js.parseString(body, function (err, result) {
 					if (err) console.log("Unable to convert XML to json", err);
 					// handle response
-					callback.apply(this, [result, body, response]);
+					callback.apply(this, [null, result, body, response]);
 					if (result) {
 						if (result.changelist) {
 							if (result.changelist.next)
@@ -113,7 +113,7 @@ function ContentHub() {
 					fromCache = false;
 					return getContentInternal(false);
 				}
-				callback.apply(this, [content]);
+				callback.apply(this, [null, content]);
 			})
 		};
 
@@ -169,7 +169,7 @@ function ContentHub() {
 						}
 					});
 
-					callback.apply(this, [content, body, response]);
+					callback.apply(this, [null, content, body, response]);
 
 
 					/*xml2js.parseString(body, function (err, result) {
